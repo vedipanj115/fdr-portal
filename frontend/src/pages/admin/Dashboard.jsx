@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getDashboardStats } from '../../api/client';
+import { getDashboardStats, getFdrs, getNotifications } from '../../api/client';
 import StatCard from '../../components/StatCard';
+import UpcomingReminders from '../../components/UpcomingReminders';
 import { formatDate, formatINRShort } from '../../utils/format';
 
 // Time Machine: move "today" forward to show which FDRs will expire.
 const JUMPS = [0, 30, 60, 90, 180, 365];
+const REMINDER_WINDOW = 90; // days
 
 export default function AdminDashboard() {
   const [offset, setOffset] = useState(0);
   const [stats, setStats] = useState(null);
+  const [reminders, setReminders] = useState(null);
+  const [fdrs, setFdrs] = useState(null);
   const asOf = new Date(Date.now() + offset * 864e5);
 
-  useEffect(() => { getDashboardStats(asOf).then(setStats); }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { getFdrs().then(setFdrs); }, []);
+  useEffect(() => {
+    getDashboardStats(asOf).then(setStats);
+    getNotifications({ asOf, upcomingDays: REMINDER_WINDOW }).then(setReminders);
+  }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -42,6 +50,8 @@ export default function AdminDashboard() {
             <StatCard label="Expired" value={stats.expired} tone="bad" />
             <StatCard label="Pending scrutiny" value={stats.pendingScrutiny} />
           </div>
+
+          <UpcomingReminders reminders={reminders} fdrs={fdrs} asOf={asOf} days={REMINDER_WINDOW} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             {[['Deposit by state', stats.byState], ['Deposit by bank', stats.byBank]].map(([title, data]) => (

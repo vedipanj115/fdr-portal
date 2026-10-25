@@ -3,7 +3,7 @@
 // and the screens keep working unchanged.
 
 import { mockFdrs, mockAuditLog, chainEntry, verification } from '../data/mockFdrs';
-import { daysUntil } from '../utils/format';
+import { daysUntil, formatDate } from '../utils/format';
 
 const USE_MOCK = true;
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -119,4 +119,66 @@ export async function getAuditLog({ fdrId } = {}) {
   if (!USE_MOCK) return http(`/audit-log${fdrId ? `?fdrId=${encodeURIComponent(fdrId)}` : ''}`);
   await delay();
   return fdrId ? auditLog.filter((e) => e.fdrId === fdrId) : auditLog;
+}
+
+// ---- Notifications (reminders + escalations) ----
+// Mock: generated from maturity dates. Reminders go out 90/60/30/7 days before maturity;
+// an FDR is escalated to AICTE 7 days before maturity if there is no renewal or refund request.
+
+const REMINDER_DAYS = [90, 60, 30, 7];
+const ESCALATE_DAYS = 7;
+const REMINDED = ['ACTIVE', 'EXPIRING', 'EXPIRED', 'RENEWED', 'REFUND_REQUESTED', 'REFUNDED']; // accepted FDRs only
+const readIds = new Set();
+
+const isoDay = (date) => date.toISOString().slice(0, 10);
+const addDays = (day, n) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return isoDay(d);
+};
+// Day the institution renewed or asked for a refund, which stops further reminders
+const resolvedOn = (fdrId) => auditLog.find((e) => e.fdrId === fdrId && ['FDR_RENEWED', 'REFUND_REQUESTED'].includes(e.action))?.at.slice(0, 10);
+
+function mockNotifications() {
+  const list = [];
+  for (const f of fdrs.filter((x) => REMINDED.includes(x.status))) {
+    const resolved = resolvedOn(f.id);
+    const add = (type, day, message) => {
+      if (!resolved || day < resolved) list.push({ id: `NTF-${f.id}-${type}`, at: `${day}T03:30:00Z`, type, message, fdrId: f.id });
+    };
+    const of = `${f.fdrNumber} of ${f.institution.name}`;
+    REMINDER_DAYS.forEach((n) => add(`REMINDER_${n}`, addDays(f.maturityDate, -n),
+      `${of} matures on ${formatDate(f.maturityDate)} (in ${n} days). Renew it or request a refund.`));
+    add('ESCALATED', addDays(f.maturityDate, -ESCALATE_DAYS),
+      `Escalated to AICTE: ${of} matures on ${formatDate(f.maturityDate)} with no renewal or refund request.`);
+  }
+  return list;
+}
+
+// Without upcomingDays: notifications sent up to asOf (default today), newest first — the bell.
+// With upcomingDays: those due from asOf to asOf + upcomingDays, plus escalations still open,
+// soonest first — the admin's "Upcoming reminders" panel (asOf = Time Machine date).
+// The backend filters by the logged-in user; the mock filters by institutionId (institutions don't see escalations).
+export async function getNotifications({ asOf = new Date(), upcomingDays, institutionId } = {}) {
+  if (!USE_MOCK) return http(`/notifications?${new URLSearchParams({ asOf: isoDay(asOf), ...(upcomingDays && { upcomingDays }) })}`);
+  await delay();
+  const today = isoDay(asOf);
+  const dayOf = (n) => n.at.slice(0, 10);
+  let list = mockNotifications();
+  if (institutionId) list = list.filter((n) => n.type !== 'ESCALATED' && fdrs.find((f) => f.id === n.fdrId).institution.id === institutionId);
+  if (upcomingDays) {
+    const until = addDays(today, upcomingDays);
+    const stillOpen = (n) => n.type === 'ESCALATED' && dayOf(n) < today && !(resolvedOn(n.fdrId) <= today);
+    list = list.filter((n) => (dayOf(n) >= today && dayOf(n) <= until) || stillOpen(n)).sort((a, b) => a.at.localeCompare(b.at));
+  } else {
+    list = list.filter((n) => dayOf(n) <= today).sort((a, b) => b.at.localeCompare(a.at));
+  }
+  const readBefore = addDays(isoDay(new Date()), -14); // mock: anything older than two weeks starts as read
+  return list.map((n) => ({ ...n, read: readIds.has(n.id) || dayOf(n) < readBefore }));
+}
+
+export async function markNotificationRead(id) {
+  if (!USE_MOCK) return http(`/notifications/${id}/read`, { method: 'POST' });
+  readIds.add(id);
+  return { id, read: true };
 }

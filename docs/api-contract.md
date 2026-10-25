@@ -49,7 +49,8 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | GET | `/dashboard/stats` | admin | `?asOf=2027-01-01` (Time Machine) | `{ active, expiring30, expired, renewed, refunded, totalAmount, byState: [], byBank: [] }` |
 | GET | `/audit-log` | admin | `?fdrId=` | `[{ id, at, actor, action, fdrId, hash, prevHash }]` |
 | GET | `/audit-log/verify` | admin | — | `{ valid: true, entries: 412 }` |
-| GET | `/notifications` | all | — | `[{ id, at, type, message, fdrId, read }]` |
+| GET | `/notifications` | all (filtered by role) | `?asOf=2026-10-25&upcomingDays=90` (both optional, see below) | `[{ id, at, type, message, fdrId, read }]` |
+| POST | `/notifications/:id/read` | all | — | `{ id, read: true }` |
 
 ## Audit actions
 
@@ -70,3 +71,19 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | `FDR_REFUNDED` | admin | Refund processed and the FDR released | Refunded |
 
 `LEDGER_CREATED` is the genesis entry of the hash chain (`fdrId: null`) and is not shown on the timeline.
+
+## Notifications
+
+`type` ∈ `REMINDER_90`, `REMINDER_60`, `REMINDER_30`, `REMINDER_7`, `ESCALATED`
+
+- Reminders go to the institution 90, 60, 30 and 7 days before `maturityDate`.
+- `ESCALATED`: 7 days before maturity, if the institution has not renewed or requested a refund, the FDR is escalated to AICTE.
+- No further reminders after the institution renews or requests a refund.
+- Institutions see reminders for their own FDRs only. Officers and admins see all notifications, including escalations.
+
+`GET /notifications` modes:
+
+| Query | Returns | Used by |
+| --- | --- | --- |
+| none (or `asOf`) | Notifications sent on or before `asOf` (default today), newest first | Header bell |
+| `asOf` + `upcomingDays` | Notifications due from `asOf` to `asOf + upcomingDays`, plus escalations still open on `asOf`, soonest first | Admin dashboard "Upcoming reminders" (`asOf` = Time Machine date) |

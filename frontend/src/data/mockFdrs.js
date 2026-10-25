@@ -36,6 +36,8 @@ const raw = [
   { id: 'FDR-2026-0007', inst: ['INST-1-7801334', 'Malabar College of Engineering', 'Kerala'], fdrNumber: 'IOBA/FD/2290013', bankName: 'Indian Overseas Bank', branch: 'Kozhikode', ifsc: 'IOBA0001198', amount: 10000000, issueDate: '2025-04-01', maturityDate: '2030-04-01', status: 'ACTIVE' },
   { id: 'FDR-2026-0008', inst: ['INST-1-3390217', 'Vidyanagar College of Engineering', 'Karnataka'], fdrNumber: 'CNRB/FD/601877', bankName: 'Canara Bank', branch: 'Jayanagar', ifsc: 'CNRB0000412', amount: 5000000, issueDate: '2026-10-21', maturityDate: '2031-10-21', status: 'CORRECTION_REQUESTED',
     overrides: { maturityDate: ['2031-10-21', '2031-10-21', '2030-10-21'] } },
+  { id: 'FDR-2026-0009', inst: ['INST-1-8812450', 'Narmada Polytechnic College', 'Madhya Pradesh'], fdrNumber: 'BKID/FD/3301876', bankName: 'Bank of India', branch: 'Arera Colony', ifsc: 'BKID0008801', amount: 1500000, issueDate: '2022-01-10', maturityDate: '2027-01-10', status: 'ACTIVE' },
+  { id: 'FDR-2026-0010', inst: ['INST-1-6120394', 'Kaveri Institute of Engineering', 'Tamil Nadu'], fdrNumber: 'IDIB/FD/7740215', bankName: 'Indian Bank', branch: 'T. Nagar', ifsc: 'IDIB000T014', amount: 6000000, issueDate: '2022-02-25', maturityDate: '2027-02-25', status: 'ACTIVE' },
 ];
 
 export const mockFdrs = raw.map(({ inst, overrides, ...f }) => ({
@@ -79,6 +81,14 @@ const events = [
   ['2021-12-24T10:30:00Z', SHARMA, 'SCRUTINY_STARTED', 'FDR-2026-0006'],
   ['2021-12-28T14:00:00Z', SHARMA, 'FDR_APPROVED', 'FDR-2026-0006'],
   ['2021-12-28T14:01:00Z', 'System', 'FDR_ACTIVATED', 'FDR-2026-0006'],
+  ['2022-01-12T10:05:00Z', 'Narmada Polytechnic College', 'FDR_SUBMITTED', 'FDR-2026-0009'],
+  ['2022-01-13T11:20:00Z', NAIR, 'SCRUTINY_STARTED', 'FDR-2026-0009'],
+  ['2022-01-17T15:10:00Z', NAIR, 'FDR_APPROVED', 'FDR-2026-0009'],
+  ['2022-01-17T15:11:00Z', 'System', 'FDR_ACTIVATED', 'FDR-2026-0009'],
+  ['2022-02-28T09:40:00Z', 'Kaveri Institute of Engineering', 'FDR_SUBMITTED', 'FDR-2026-0010'],
+  ['2022-03-02T10:30:00Z', SHARMA, 'SCRUTINY_STARTED', 'FDR-2026-0010'],
+  ['2022-03-04T12:15:00Z', SHARMA, 'FDR_APPROVED', 'FDR-2026-0010'],
+  ['2022-03-04T12:16:00Z', 'System', 'FDR_ACTIVATED', 'FDR-2026-0010'],
   ['2024-07-03T10:15:00Z', 'Shree Ganesh Institute of Technology', 'FDR_SUBMITTED', 'FDR-2026-0001'],
   ['2024-07-04T09:50:00Z', SHARMA, 'SCRUTINY_STARTED', 'FDR-2026-0001'],
   ['2024-07-05T16:20:00Z', SHARMA, 'FDR_APPROVED', 'FDR-2026-0001'],
