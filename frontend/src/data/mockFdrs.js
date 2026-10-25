@@ -57,22 +57,6 @@ export const mockFdrs = raw.map(({ inst, overrides, ...f }) => ({
   verification: verification(f, overrides),
 }));
 
-// Fake hash so the mock log looks like a chain. The real one is SHA-256 (backend).
-function fakeHash(text) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
-  const hex = h.toString(16).padStart(8, '0');
-  return `${hex.slice(0, 4)}…${hex.slice(4)}`;
-}
-
-// Next audit entry, linked to the newest one in `log` (newest first).
-export function chainEntry(log, { at, actor, action, fdrId = null }) {
-  const prev = log[0];
-  const prevHash = prev ? prev.hash : '—';
-  const hash = prev ? fakeHash(`${prevHash}|${at}|${actor}|${action}|${fdrId}`) : '0000…0000';
-  return { id: (prev?.id || 0) + 1, at, actor, action, fdrId, hash, prevHash };
-}
-
 const SHARMA = 'Officer R. Sharma';
 const NAIR = 'Officer P. Nair';
 
@@ -136,7 +120,5 @@ const events = [
   ['2026-10-24T16:42:00Z', SHARMA, 'CORRECTION_REQUESTED', 'FDR-2026-0008'],
 ];
 
-export const mockAuditLog = events.reduce(
-  (log, [at, actor, action, fdrId]) => [chainEntry(log, { at, actor, action, fdrId }), ...log],
-  []
-);
+// Newest first, without hashes: api/client.js seals them into a SHA-256 chain on load.
+export const mockAuditLog = events.map(([at, actor, action, fdrId], i) => ({ id: i + 1, at, actor, action, fdrId })).reverse();

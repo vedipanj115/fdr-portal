@@ -2,7 +2,8 @@
 // Today it returns mock data. When Preet's API is ready, set USE_MOCK = false
 // and the screens keep working unchanged.
 
-import { mockFdrs, mockAuditLog, chainEntry, verification } from '../data/mockFdrs';
+import { mockFdrs, mockAuditLog, verification } from '../data/mockFdrs';
+import { entryHash, GENESIS_HASH, verifyChain } from '../utils/hashChain';
 import { daysUntil, formatDate } from '../utils/format';
 
 const USE_MOCK = true;
@@ -10,11 +11,25 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 let fdrs = [...mockFdrs];
-let auditLog = [...mockAuditLog];
+let auditLog = mockAuditLog.map((e) => ({ ...e, hash: null, prevHash: null })); // newest first
 
 // Mock only: the backend writes audit entries itself.
+// Each entry's hash is computed once, when it is recorded, and stored — like the backend does.
+// Hashing is async (Web Crypto), so entries are sealed in order on a queue; reads wait for it.
+let sealing = Promise.resolve();
+const seal = (entry) => {
+  sealing = sealing.then(async () => {
+    const prev = auditLog.find((e) => e.id === entry.id - 1);
+    entry.prevHash = prev ? prev.hash : GENESIS_HASH;
+    entry.hash = await entryHash(entry.prevHash, entry);
+  });
+};
+[...auditLog].reverse().forEach(seal);
+
 const logAction = (actor, action, fdrId) => {
-  auditLog = [chainEntry(auditLog, { at: new Date().toISOString(), actor, action, fdrId }), ...auditLog];
+  const entry = { id: auditLog[0].id + 1, at: new Date().toISOString(), actor, action, fdrId, hash: null, prevHash: null };
+  auditLog = [entry, ...auditLog];
+  seal(entry);
 };
 
 async function http(path, options = {}) {
@@ -160,7 +175,36 @@ export async function getDashboardStats(asOf = new Date()) {
 export async function getAuditLog({ fdrId } = {}) {
   if (!USE_MOCK) return http(`/audit-log${fdrId ? `?fdrId=${encodeURIComponent(fdrId)}` : ''}`);
   await delay();
-  return fdrId ? auditLog.filter((e) => e.fdrId === fdrId) : auditLog;
+  await sealing;
+  return (fdrId ? auditLog.filter((e) => e.fdrId === fdrId) : auditLog).map((e) => ({ ...e }));
+}
+
+// Recomputes every hash from the first entry. Returns { valid, entries, brokenAt }.
+export async function verifyAuditLog() {
+  if (!USE_MOCK) return http('/audit-log/verify');
+  await delay(600);
+  await sealing;
+  return verifyChain([...auditLog].reverse());
+}
+
+// Demo only (mock): edit one past entry in storage without touching its stored hash,
+// the way someone tampering with the database directly would. Turning it off restores it.
+export const CAN_SIMULATE_TAMPERING = USE_MOCK;
+const TAMPER = { fdrId: 'FDR-2026-0001', from: 'FDR_APPROVED', to: 'FDR_REJECTED' };
+let tamperedId = null;
+
+export async function setAuditTampering(on) {
+  await sealing;
+  if (on && !tamperedId) {
+    const target = auditLog.find((e) => e.fdrId === TAMPER.fdrId && e.action === TAMPER.from);
+    target.action = TAMPER.to;
+    tamperedId = target.id;
+  } else if (!on && tamperedId) {
+    auditLog.find((e) => e.id === tamperedId).action = TAMPER.from;
+    tamperedId = null;
+  }
+  const id = on ? tamperedId : auditLog.find((e) => e.fdrId === TAMPER.fdrId && e.action === TAMPER.from)?.id;
+  return { id, ...TAMPER };
 }
 
 // ---- Notifications (reminders + escalations) ----

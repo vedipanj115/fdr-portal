@@ -56,9 +56,20 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | POST | `/fdrs/:id/refund-decision` | officer | `{ decision: "APPROVE" \| "REJECT", remarks, checklist: { matured, noComplaints, documentReturned } }` | `FDR` (`REFUNDED`, or back to `ACTIVE` on reject). `APPROVE` needs all three checklist items `true`; `REJECT` needs `remarks` |
 | GET | `/dashboard/stats` | admin | `?asOf=2027-01-01` (Time Machine) | `{ active, expiring30, expired, renewed, refunded, totalAmount, byState: [], byBank: [] }` |
 | GET | `/audit-log` | admin | `?fdrId=` | `[{ id, at, actor, action, fdrId, hash, prevHash }]` |
-| GET | `/audit-log/verify` | admin | — | `{ valid: true, entries: 412 }` |
+| GET | `/audit-log/verify` | admin | — | `{ valid: true, entries: 412, brokenAt: null }`; when broken, `valid: false` and `brokenAt` = id of the first entry that fails (see Audit hash chain) |
 | GET | `/notifications` | all (filtered by role) | `?asOf=2026-10-25&upcomingDays=90` (both optional, see below) | `[{ id, at, type, message, fdrId, read }]` |
 | POST | `/notifications/:id/read` | all | — | `{ id, read: true }` |
+
+## Audit hash chain
+
+Entries are append-only. When an entry is recorded, the backend stores:
+
+- `prevHash`: the previous entry's `hash`; for the first entry, 64 zeros.
+- `hash`: lowercase hex SHA-256 of `prevHash|at|actor|action|fdrId`. The five values are joined with `|`; `fdrId` is `""` when null; `at` is the exact ISO string returned by the API.
+
+Hashes are full 64-character hex strings; the UI shows the first 8.
+To verify, recompute every hash from the first entry, carrying the recomputed hash forward as the next `prevHash`. The first entry whose stored `prevHash` or `hash` differs is `brokenAt`. From there on every later hash differs as well, so the whole tail counts as broken.
+The frontend (`utils/hashChain.js`) uses this exact formula, so the browser can check the backend's chain itself.
 
 ## Audit actions
 
