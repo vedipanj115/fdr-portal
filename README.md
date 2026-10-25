@@ -21,8 +21,8 @@ One portal where AICTE-approved institutions submit their security-deposit FDRs 
 | `db/` | PostgreSQL schema + seed data | Preet |
 | `automation/` | OCR, mismatch rules, reminder scheduler, mock bank API | Hetakshi |
 | `docs/research/` | AICTE handbook clauses, circulars, evidence | Janhavi |
-| `docs/diagrams/` | Architecture, lifecycle, ER diagrams (draw.io + PNG) | Ananay |
-| `docs/video/` | Video script and assets | Ananay |
+| `docs/diagrams/` | Architecture, lifecycle, ER diagrams (draw.io + PNG) | Ananya |
+| `docs/video/` | Video script and assets | Ananya |
 | `docs/ppt/` | Idea deck drafts, final PDF, screenshots | Aarohi |
 | `docs/api-contract.md` | The agreed API between frontend and backend | Preet + Vedika |
 
@@ -55,4 +55,4 @@ Commit prefixes: `feat` · `fix` · `docs` · `style` · `chore`.
 
 ## Team
 
-Aarohi Limaye (lead) · Janhavi · Preet · Vedika · Hetakshi · Ananay
+Aarohi Limaye (lead) · Janhavi · Preet · Vedika · Hetakshi · Ananya
