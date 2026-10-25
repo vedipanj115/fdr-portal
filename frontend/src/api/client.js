@@ -2,7 +2,7 @@
 // Today it returns mock data. When Preet's API is ready, set USE_MOCK = false
 // and the screens keep working unchanged.
 
-import { mockFdrs, mockAuditLog } from '../data/mockFdrs';
+import { mockFdrs, mockAuditLog, chainEntry } from '../data/mockFdrs';
 import { daysUntil } from '../utils/format';
 
 const USE_MOCK = true;
@@ -10,6 +10,12 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 let fdrs = [...mockFdrs];
+let auditLog = [...mockAuditLog];
+
+// Mock only: the backend writes audit entries itself.
+const logAction = (actor, action, fdrId) => {
+  auditLog = [chainEntry(auditLog, { at: new Date().toISOString(), actor, action, fdrId }), ...auditLog];
+};
 
 async function http(path, options = {}) {
   const res = await fetch(BASE_URL + path, {
@@ -44,6 +50,10 @@ export async function verifyFdr(id, decision, remarks) {
   if (!USE_MOCK) return http(`/fdrs/${id}/verify`, { method: 'POST', body: JSON.stringify({ decision, remarks }) });
   await delay();
   const next = { APPROVE: 'ACTIVE', REJECT: 'REJECTED', CORRECTION: 'CORRECTION_REQUESTED' }[decision];
+  const officer = 'Officer R. Sharma';
+  if (fdrs.find((f) => f.id === id)?.status === 'SUBMITTED') logAction(officer, 'SCRUTINY_STARTED', id);
+  logAction(officer, { APPROVE: 'FDR_APPROVED', REJECT: 'FDR_REJECTED', CORRECTION: 'CORRECTION_REQUESTED' }[decision], id);
+  if (decision === 'APPROVE') logAction('System', 'FDR_ACTIVATED', id);
   fdrs = fdrs.map((f) => (f.id === id ? { ...f, status: next } : f));
   return fdrs.find((f) => f.id === id);
 }
@@ -68,8 +78,9 @@ export async function getDashboardStats(asOf = new Date()) {
   };
 }
 
-export async function getAuditLog() {
-  if (!USE_MOCK) return http('/audit-log');
+// Newest first. Pass fdrId for one FDR's history (used for its lifecycle timeline).
+export async function getAuditLog({ fdrId } = {}) {
+  if (!USE_MOCK) return http(`/audit-log${fdrId ? `?fdrId=${encodeURIComponent(fdrId)}` : ''}`);
   await delay();
-  return mockAuditLog;
+  return fdrId ? auditLog.filter((e) => e.fdrId === fdrId) : auditLog;
 }

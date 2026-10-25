@@ -5,7 +5,7 @@ import { createContext, useContext, useState } from 'react';
 const DEMO_USERS = {
   INSTITUTION: { name: 'Shree Ganesh Institute of Technology', role: 'INSTITUTION', institutionId: 'INST-1-4412093' },
   OFFICER: { name: 'R. Sharma', role: 'OFFICER' },
-  ADMIN: { name: 'AICTE Admin', role: 'ADMIN' },
+  ADMIN: { name: 'K. Menon', role: 'ADMIN' },
 };
 
 const AuthContext = createContext(null);
