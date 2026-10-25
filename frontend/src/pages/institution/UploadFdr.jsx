@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createFdr } from '../../api/client';
+import { createFdr, renewFdr, runVerification, VERIFICATION_STEPS } from '../../api/client';
 import { useAuth } from '../../auth';
+import VerificationProgress from '../../components/VerificationProgress';
+import { formatDate } from '../../utils/format';
 
 const BANKS = ['State Bank of India', 'Bank of Baroda', 'Canara Bank', 'Punjab National Bank', 'Union Bank of India', 'Indian Overseas Bank', 'Bank of India', 'Indian Bank'];
 
@@ -19,13 +21,16 @@ function validate(v) {
   return e;
 }
 
-export default function UploadFdr() {
+// renewOf: the FDR being renewed (from RenewFdr) — pre-fills bank details and amount.
+export default function UploadFdr({ renewOf }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [values, setValues] = useState(EMPTY);
+  const prefill = renewOf ? { ...EMPTY, bankName: renewOf.bankName, branch: renewOf.branch, ifsc: renewOf.ifsc, amount: String(renewOf.amount) } : EMPTY;
+  const [values, setValues] = useState(prefill);
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [check, setCheck] = useState(null); // { fdr, done: [stepKey], result } once submitted
 
   const set = (k) => (e) => setValues({ ...values, [k]: k === 'ifsc' ? e.target.value.toUpperCase() : e.target.value });
 
@@ -36,9 +41,22 @@ export default function UploadFdr() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
-    await createFdr({ ...values, amount: Number(values.amount), institution: { id: user.institutionId, name: user.name, state: 'Maharashtra' } });
-    navigate('/institution/fdrs');
+    const data = { ...values, amount: Number(values.amount), institution: { id: user.institutionId, name: user.name, state: 'Maharashtra' } };
+    const fdr = renewOf ? await renewFdr(renewOf.id, data) : await createFdr(data);
+    setCheck({ fdr, done: [], result: null });
+    const result = await runVerification(fdr.id, (key) => setCheck((c) => ({ ...c, done: [...c.done, key] })));
+    setCheck((c) => ({ ...c, result }));
   };
+
+  const uploadAnother = () => {
+    if (renewOf) { navigate('/institution/upload'); return; }
+    setValues(EMPTY);
+    setFile(null);
+    setSaving(false);
+    setCheck(null);
+  };
+
+  if (check) return <VerificationProgress {...check} steps={VERIFICATION_STEPS} renewOf={renewOf} onUploadAnother={uploadAnother} />;
 
   const input = (k, label, props = {}) => (
     <div>
@@ -51,8 +69,14 @@ export default function UploadFdr() {
   return (
     <form onSubmit={submit} className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Upload FDR</h1>
-        <p className="text-sm text-gray-500">The details you enter are checked against the uploaded document and the bank's records.</p>
+        <h1 className="text-xl font-semibold">{renewOf ? 'Renew FDR' : 'Upload FDR'}</h1>
+        {renewOf && (
+          <p className="mt-2 rounded-md bg-navy-50 px-4 py-3 text-sm text-navy-800 ring-1 ring-navy-100">
+            Replacing <span className="font-semibold">{renewOf.fdrNumber}</span> ({renewOf.id}), maturing {formatDate(renewOf.maturityDate)}.
+            Bank details and amount are copied from it; enter the new FDR's number and dates.
+          </p>
+        )}
+        <p className="mt-1 text-sm text-gray-500">The details you enter are checked against the uploaded document and the bank's records.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">

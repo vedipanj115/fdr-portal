@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
+import NotificationBell from './NotificationBell';
 
 const NAV = {
   INSTITUTION: [
@@ -7,7 +8,10 @@ const NAV = {
     ['/institution/fdrs', 'My FDRs'],
     ['/institution/upload', 'Upload FDR'],
   ],
-  OFFICER: [['/officer', 'Scrutiny queue']],
+  OFFICER: [
+    ['/officer', 'Scrutiny queue'],
+    ['/officer/refunds', 'Refund requests'],
+  ],
   ADMIN: [
     ['/admin', 'Dashboard'],
     ['/admin/audit', 'Audit log'],
@@ -30,6 +34,7 @@ export default function Layout() {
             <p className="font-semibold">Security Deposit / FDR Portal</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <NotificationBell />
             <span className="text-navy-100">{user.name} · {ROLE_LABEL[user.role]}</span>
             <button onClick={() => { logout(); navigate('/'); }} className="rounded-md border border-white/30 px-3 py-1 hover:bg-white/10">
               Log out
@@ -38,7 +43,7 @@ export default function Layout() {
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
           {NAV[user.role].map(([to, label]) => (
-            <NavLink key={to} to={to} end className={({ isActive }) => `whitespace-nowrap border-b-2 px-3 py-2 text-sm ${isActive ? 'border-white font-semibold' : 'border-transparent text-navy-100 hover:text-white'}`}>
+            <NavLink key={to} to={to} end={to.split('/').length === 2} className={({ isActive }) => `whitespace-nowrap border-b-2 px-3 py-2 text-sm ${isActive ? 'border-white font-semibold' : 'border-transparent text-navy-100 hover:text-white'}`}>
               {label}
             </NavLink>
           ))}
