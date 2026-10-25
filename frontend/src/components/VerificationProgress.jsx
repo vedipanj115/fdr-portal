@@ -8,7 +8,7 @@ function StepIcon({ state }) {
   return <span className="h-4 w-4 rounded-full border-2 border-gray-300" />;
 }
 
-export default function VerificationProgress({ fdr, steps, done, result, onUploadAnother }) {
+export default function VerificationProgress({ fdr, steps, done, result, renewOf, onUploadAnother }) {
   const running = steps.find((s) => !done.includes(s.key))?.key;
   const mismatches = result?.verification.fields.filter((f) => f.result !== 'MATCH').length || 0;
 
@@ -17,6 +17,7 @@ export default function VerificationProgress({ fdr, steps, done, result, onUploa
       <div>
         <h1 className="text-xl font-semibold">{result ? 'Verification complete' : 'Verifying your FDR…'}</h1>
         <p className="text-sm text-gray-500">{fdr.fdrNumber} · {fdr.bankName} · {fdr.id}</p>
+        {renewOf && <p className="mt-1 text-sm text-gray-700">Renewal of {renewOf.fdrNumber} ({renewOf.id}), now marked as renewed.</p>}
       </div>
 
       <ol className="space-y-3 rounded-lg border border-gray-200 bg-white p-5" aria-live="polite">

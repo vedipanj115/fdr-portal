@@ -54,6 +54,8 @@ function currentNote(fdr, events) {
       return { tone: 'amber', text: `Matures ${formatDate(fdr.maturityDate)} (${left} ${left === 1 ? 'day' : 'days'} left)` };
     case 'EXPIRED':
       return { tone: 'red', text: `Matured ${formatDate(fdr.maturityDate)} — no renewal or refund request`, event: latest(events, ['FDR_EXPIRED']) };
+    case 'RENEWED':
+      return { tone: 'green', text: fdr.renewedBy ? `Replaced by ${fdr.renewedBy}` : null };
     case 'REFUNDED':
       return { tone: 'green' };
     default:

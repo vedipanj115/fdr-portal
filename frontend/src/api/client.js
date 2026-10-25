@@ -38,13 +38,57 @@ export async function getFdr(id) {
   return fdrs.find((f) => f.id === id) || null;
 }
 
-export async function createFdr(data) {
-  if (!USE_MOCK) return http('/fdrs', { method: 'POST', body: JSON.stringify(data) });
-  await delay(500);
-  const fdr = { ...data, id: `FDR-2026-${String(fdrs.length + 1).padStart(4, '0')}`, status: 'SUBMITTED', verification: { fields: [], score: 0, total: 0 } };
+function addMockFdr(data, renewalOf = null) {
+  const fdr = {
+    renewedBy: null, refundRequest: null, ...data, renewalOf,
+    id: `FDR-2026-${String(fdrs.length + 1).padStart(4, '0')}`, status: 'SUBMITTED', verification: { fields: [], score: 0, total: 0 },
+  };
   fdrs = [fdr, ...fdrs];
   logAction(fdr.institution.name, 'FDR_SUBMITTED', fdr.id);
   return fdr;
+}
+
+const updateMockFdr = (id, changes) => {
+  fdrs = fdrs.map((f) => (f.id === id ? { ...f, ...changes } : f));
+  return fdrs.find((f) => f.id === id);
+};
+
+export async function createFdr(data) {
+  if (!USE_MOCK) return http('/fdrs', { method: 'POST', body: JSON.stringify(data) });
+  await delay(500);
+  return addMockFdr(data);
+}
+
+// Lodge a new FDR replacing `id`. Returns the NEW FDR; the old one becomes RENEWED.
+export async function renewFdr(id, data) {
+  if (!USE_MOCK) return http(`/fdrs/${id}/renew`, { method: 'POST', body: JSON.stringify(data) });
+  await delay(500);
+  const old = fdrs.find((f) => f.id === id);
+  logAction(old.institution.name, 'FDR_RENEWED', id);
+  const fdr = addMockFdr(data, id);
+  updateMockFdr(id, { status: 'RENEWED', renewedBy: fdr.id });
+  return fdr;
+}
+
+export async function requestRefund(id, reason) {
+  if (!USE_MOCK) return http(`/fdrs/${id}/refund-request`, { method: 'POST', body: JSON.stringify({ reason }) });
+  await delay();
+  const fdr = fdrs.find((f) => f.id === id);
+  logAction(fdr.institution.name, 'REFUND_REQUESTED', id);
+  return updateMockFdr(id, { status: 'REFUND_REQUESTED', refundRequest: { reason, requestedAt: new Date().toISOString(), decision: null, remarks: null } });
+}
+
+// checklist: { matured, noComplaints, documentReturned } — all must be true to approve
+export async function decideRefund(id, decision, remarks, checklist) {
+  if (!USE_MOCK) return http(`/fdrs/${id}/refund-decision`, { method: 'POST', body: JSON.stringify({ decision, remarks, checklist }) });
+  await delay();
+  const fdr = fdrs.find((f) => f.id === id);
+  const approve = decision === 'APPROVE';
+  logAction('Officer R. Sharma', approve ? 'FDR_REFUNDED' : 'REFUND_REJECTED', id);
+  return updateMockFdr(id, {
+    status: approve ? 'REFUNDED' : 'ACTIVE',
+    refundRequest: { ...fdr.refundRequest, decision: approve ? 'APPROVED' : 'REJECTED', remarks: remarks || null },
+  });
 }
 
 export const VERIFICATION_STEPS = [
@@ -78,8 +122,7 @@ export async function runVerification(id, onStep = () => {}) {
   onStep('BANK');
   await delay(900);
   onStep('RULES');
-  fdrs = fdrs.map((f) => (f.id === id ? { ...f, verification: verification(f, overrides) } : f));
-  return fdrs.find((f) => f.id === id);
+  return updateMockFdr(id, { verification: verification(fdr, overrides) });
 }
 
 export async function verifyFdr(id, decision, remarks) {
@@ -90,15 +133,14 @@ export async function verifyFdr(id, decision, remarks) {
   if (fdrs.find((f) => f.id === id)?.status === 'SUBMITTED') logAction(officer, 'SCRUTINY_STARTED', id);
   logAction(officer, { APPROVE: 'FDR_APPROVED', REJECT: 'FDR_REJECTED', CORRECTION: 'CORRECTION_REQUESTED' }[decision], id);
   if (decision === 'APPROVE') logAction('System', 'FDR_ACTIVATED', id);
-  fdrs = fdrs.map((f) => (f.id === id ? { ...f, status: next } : f));
-  return fdrs.find((f) => f.id === id);
+  return updateMockFdr(id, { status: next });
 }
 
 // asOf = the Time Machine date (defaults to today)
 export async function getDashboardStats(asOf = new Date()) {
   if (!USE_MOCK) return http(`/dashboard/stats?asOf=${asOf.toISOString().slice(0, 10)}`);
   await delay();
-  const live = fdrs.filter((f) => !['REJECTED', 'REFUNDED'].includes(f.status));
+  const live = fdrs.filter((f) => !['REJECTED', 'REFUNDED', 'RENEWED'].includes(f.status));
   const left = (f) => daysUntil(f.maturityDate, asOf);
   const group = (key) =>
     Object.entries(live.reduce((acc, f) => ({ ...acc, [key(f)]: (acc[key(f)] || 0) + f.amount }), {})).map(([name, amount]) => ({ name, amount }));
@@ -136,8 +178,11 @@ const addDays = (day, n) => {
   d.setUTCDate(d.getUTCDate() + n);
   return isoDay(d);
 };
-// Day the institution renewed or asked for a refund, which stops further reminders
-const resolvedOn = (fdrId) => auditLog.find((e) => e.fdrId === fdrId && ['FDR_RENEWED', 'REFUND_REQUESTED'].includes(e.action))?.at.slice(0, 10);
+// Day the institution renewed or asked for a refund, which stops further reminders (a rejected refund restarts them)
+const resolvedOn = (fdrId) => {
+  const last = auditLog.find((e) => e.fdrId === fdrId && ['FDR_RENEWED', 'REFUND_REQUESTED', 'REFUND_REJECTED'].includes(e.action));
+  return last && last.action !== 'REFUND_REJECTED' ? last.at.slice(0, 10) : undefined;
+};
 
 function mockNotifications() {
   const list = [];

@@ -26,6 +26,9 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
     "score": 6,
     "total": 6
   },
+  "renewalOf": null,
+  "renewedBy": null,
+  "refundRequest": null,
   "createdAt": "2024-07-03T10:15:00Z",
   "updatedAt": "2026-10-20T09:00:00Z"
 }
@@ -34,6 +37,10 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 `status` ∈ `SUBMITTED`, `UNDER_SCRUTINY`, `CORRECTION_REQUESTED`, `ACTIVE`, `EXPIRING`, `EXPIRED`, `RENEWED`, `REFUND_REQUESTED`, `REFUNDED`, `REJECTED`
 
 `verification.fields[].result` ∈ `MATCH`, `MISMATCH`, `MISSING`
+
+- `renewalOf`: id of the FDR this one replaces (set on the new FDR by `POST /fdrs/:id/renew`), else `null`.
+- `renewedBy`: id of the FDR that replaced this one (set on the old FDR, whose status becomes `RENEWED`), else `null`.
+- `refundRequest`: `null`, or `{ "reason": "...", "requestedAt": "2026-10-22T11:25:00Z", "decision": null | "APPROVED" | "REJECTED", "remarks": null | "..." }`.
 
 ## Endpoints
 
@@ -44,8 +51,9 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | GET | `/fdrs/:id` | all | — | `FDR` |
 | POST | `/fdrs` | institution | multipart: fields + `document` file | `FDR` |
 | POST | `/fdrs/:id/verify` | officer | `{ decision: "APPROVE" \| "REJECT" \| "CORRECTION", remarks }` | `FDR` |
-| POST | `/fdrs/:id/renew` | institution | multipart: new FDR fields + file | `FDR` |
-| POST | `/fdrs/:id/refund-request` | institution | `{ reason }` | `FDR` |
+| POST | `/fdrs/:id/renew` | institution | multipart: new FDR fields + file | the **new** `FDR` (`SUBMITTED`, `renewalOf` = `:id`); the old FDR becomes `RENEWED` with `renewedBy` set |
+| POST | `/fdrs/:id/refund-request` | institution | `{ reason }` | `FDR` (status `REFUND_REQUESTED`) |
+| POST | `/fdrs/:id/refund-decision` | officer | `{ decision: "APPROVE" \| "REJECT", remarks, checklist: { matured, noComplaints, documentReturned } }` | `FDR` (`REFUNDED`, or back to `ACTIVE` on reject). `APPROVE` needs all three checklist items `true`; `REJECT` needs `remarks` |
 | GET | `/dashboard/stats` | admin | `?asOf=2027-01-01` (Time Machine) | `{ active, expiring30, expired, renewed, refunded, totalAmount, byState: [], byBank: [] }` |
 | GET | `/audit-log` | admin | `?fdrId=` | `[{ id, at, actor, action, fdrId, hash, prevHash }]` |
 | GET | `/audit-log/verify` | admin | — | `{ valid: true, entries: 412 }` |
@@ -54,7 +62,7 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 
 ## Audit actions
 
-`action` values written to the audit log. The FDR lifecycle timeline (officer FDR detail page) is built from `GET /audit-log?fdrId=`, so the backend must log these exact names. Officers need read access to `/audit-log?fdrId=` for this, not just admins.
+`action` values written to the audit log. The FDR lifecycle timeline (officer FDR detail and refund pages) is built from `GET /audit-log?fdrId=`, so the backend must log these exact names. Officers need read access to `/audit-log?fdrId=` for this, not just admins.
 
 | Action | Actor | Logged when | Timeline stage |
 | --- | --- | --- | --- |
@@ -68,7 +76,8 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | `FDR_EXPIRED` | system | Maturity date passed with no renewal or refund request | Expired |
 | `FDR_RENEWED` | institution | Institution renews with a new FDR (`POST /fdrs/:id/renew`) | Renewed |
 | `REFUND_REQUESTED` | institution | Institution asks for the deposit back (`POST /fdrs/:id/refund-request`) | Refund requested |
-| `FDR_REFUNDED` | admin | Refund processed and the FDR released | Refunded |
+| `REFUND_REJECTED` | officer | Officer rejects the refund request; FDR goes back to `ACTIVE` and reminders resume | Active |
+| `FDR_REFUNDED` | officer | Officer approves the refund after the checklist (`POST /fdrs/:id/refund-decision`) | Refunded |
 
 `LEDGER_CREATED` is the genesis entry of the hash chain (`fdrId: null`) and is not shown on the timeline.
 
