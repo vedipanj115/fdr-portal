@@ -34,6 +34,7 @@ function stagesFor(status) {
   return STAGES
     .filter((s) => !(status === 'RENEWED' && s.key === 'REFUNDED')) // a renewal ends this FDR's lifecycle
     .map((s) => {
+      if (s.key === 'EXPIRING' && status === 'EXPIRED') return { ...s, label: 'Expired' };
       if (s.key !== 'CLOSING') return s;
       if (status === 'RENEWED') return { ...s, label: 'Renewed' };
       if (['REFUND_REQUESTED', 'REFUNDED'].includes(status)) return { ...s, label: 'Refund requested' };
