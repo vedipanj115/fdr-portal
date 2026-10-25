@@ -50,3 +50,23 @@ Dates are ISO strings (`2026-10-25`). Amounts are integers in rupees.
 | GET | `/audit-log` | admin | `?fdrId=` | `[{ id, at, actor, action, fdrId, hash, prevHash }]` |
 | GET | `/audit-log/verify` | admin | — | `{ valid: true, entries: 412 }` |
 | GET | `/notifications` | all | — | `[{ id, at, type, message, fdrId, read }]` |
+
+## Audit actions
+
+`action` values written to the audit log. The FDR lifecycle timeline (officer FDR detail page) is built from `GET /audit-log?fdrId=`, so the backend must log these exact names. Officers need read access to `/audit-log?fdrId=` for this, not just admins.
+
+| Action | Actor | Logged when | Timeline stage |
+| --- | --- | --- | --- |
+| `FDR_SUBMITTED` | institution | Institution uploads a new FDR (`POST /fdrs`) | Submitted |
+| `SCRUTINY_STARTED` | officer | An officer picks up the FDR for verification | Under scrutiny |
+| `CORRECTION_REQUESTED` | officer | Officer asks the institution to correct details (`decision: "CORRECTION"`) | Under scrutiny (amber note) |
+| `FDR_REJECTED` | officer | Officer rejects the FDR (`decision: "REJECT"`) | Under scrutiny (red note) |
+| `FDR_APPROVED` | officer | Officer approves the FDR (`decision: "APPROVE"`) | Verified |
+| `FDR_ACTIVATED` | system | FDR becomes active after approval (status `ACTIVE`) | Active |
+| `REMINDER_30_SENT` | system | 30-day maturity reminder sent to the institution | Expiring |
+| `FDR_EXPIRED` | system | Maturity date passed with no renewal or refund request | Expired |
+| `FDR_RENEWED` | institution | Institution renews with a new FDR (`POST /fdrs/:id/renew`) | Renewed |
+| `REFUND_REQUESTED` | institution | Institution asks for the deposit back (`POST /fdrs/:id/refund-request`) | Refund requested |
+| `FDR_REFUNDED` | admin | Refund processed and the FDR released | Refunded |
+
+`LEDGER_CREATED` is the genesis entry of the hash chain (`fdrId: null`) and is not shown on the timeline.
