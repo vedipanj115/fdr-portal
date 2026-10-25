@@ -53,15 +53,10 @@ export const VERIFICATION_STEPS = [
   { key: 'RULES', label: 'Running rules' },
 ];
 
-// Mock OCR: common scanning confusions, so a mismatch can be demoed.
+// Mock OCR demo trigger: an FDR number ending in "X" (e.g. SBI/FD/12345X) makes OCR
+// misread the amount, like a scanner confusing 2 and 7. Anything else matches.
 const OCR_DIGIT_SWAP = { 0: '8', 8: '0', 1: '7', 7: '1', 5: '6', 6: '5', 3: '8', 2: '7', 4: '9', 9: '4' };
-const swapLastDigit = (text) => text.replace(/(\d)(\D*)$/, (_, d, rest) => OCR_DIGIT_SWAP[d] + rest);
-const swapFirstDigit = (text) => text.replace(/\d/, (d) => OCR_DIGIT_SWAP[d]);
-const MISREADS = [
-  ['fdrNumber', (f) => swapLastDigit(f.fdrNumber)],
-  ['amount', (f) => swapFirstDigit(String(f.amount))],
-  ['maturityDate', (f) => `${Number(f.maturityDate.slice(0, 4)) - 1}${f.maturityDate.slice(4)}`],
-];
+const misreadAmount = (amount) => String(amount).replace(/\d/, (d) => OCR_DIGIT_SWAP[d]);
 
 // Automated checks on a just-uploaded FDR; onStep(key) fires as each step finishes.
 // The backend runs these on upload, so the real API has no per-step progress to report.
@@ -74,10 +69,9 @@ export async function runVerification(id, onStep = () => {}) {
   const fdr = fdrs.find((f) => f.id === id);
   const overrides = {};
   await delay(1400);
-  if (Math.random() < 0.5) { // OCR misreads one field about half the time
-    const [field, misread] = MISREADS[Math.floor(Math.random() * MISREADS.length)];
-    const claimed = field === 'amount' ? String(fdr.amount) : fdr[field];
-    overrides[field] = [claimed, misread(fdr), claimed]; // the bank record agrees with the institution
+  if (/x$/i.test(fdr.fdrNumber.trim())) {
+    const claimed = String(fdr.amount);
+    overrides.amount = [claimed, misreadAmount(fdr.amount), claimed]; // the bank record agrees with the institution
   }
   onStep('OCR');
   await delay(1200);
