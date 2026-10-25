@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createFdr } from '../../api/client';
+import { createFdr, runVerification, VERIFICATION_STEPS } from '../../api/client';
 import { useAuth } from '../../auth';
+import VerificationProgress from '../../components/VerificationProgress';
 
 const BANKS = ['State Bank of India', 'Bank of Baroda', 'Canara Bank', 'Punjab National Bank', 'Union Bank of India', 'Indian Overseas Bank', 'Bank of India', 'Indian Bank'];
 
@@ -26,6 +27,7 @@ export default function UploadFdr() {
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [check, setCheck] = useState(null); // { fdr, done: [stepKey], result } once submitted
 
   const set = (k) => (e) => setValues({ ...values, [k]: k === 'ifsc' ? e.target.value.toUpperCase() : e.target.value });
 
@@ -36,9 +38,20 @@ export default function UploadFdr() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
-    await createFdr({ ...values, amount: Number(values.amount), institution: { id: user.institutionId, name: user.name, state: 'Maharashtra' } });
-    navigate('/institution/fdrs');
+    const fdr = await createFdr({ ...values, amount: Number(values.amount), institution: { id: user.institutionId, name: user.name, state: 'Maharashtra' } });
+    setCheck({ fdr, done: [], result: null });
+    const result = await runVerification(fdr.id, (key) => setCheck((c) => ({ ...c, done: [...c.done, key] })));
+    setCheck((c) => ({ ...c, result }));
   };
+
+  const uploadAnother = () => {
+    setValues(EMPTY);
+    setFile(null);
+    setSaving(false);
+    setCheck(null);
+  };
+
+  if (check) return <VerificationProgress {...check} steps={VERIFICATION_STEPS} onUploadAnother={uploadAnother} />;
 
   const input = (k, label, props = {}) => (
     <div>

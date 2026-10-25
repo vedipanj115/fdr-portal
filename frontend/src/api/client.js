@@ -2,7 +2,7 @@
 // Today it returns mock data. When Preet's API is ready, set USE_MOCK = false
 // and the screens keep working unchanged.
 
-import { mockFdrs, mockAuditLog, chainEntry } from '../data/mockFdrs';
+import { mockFdrs, mockAuditLog, chainEntry, verification } from '../data/mockFdrs';
 import { daysUntil } from '../utils/format';
 
 const USE_MOCK = true;
@@ -43,7 +43,49 @@ export async function createFdr(data) {
   await delay(500);
   const fdr = { ...data, id: `FDR-2026-${String(fdrs.length + 1).padStart(4, '0')}`, status: 'SUBMITTED', verification: { fields: [], score: 0, total: 0 } };
   fdrs = [fdr, ...fdrs];
+  logAction(fdr.institution.name, 'FDR_SUBMITTED', fdr.id);
   return fdr;
+}
+
+export const VERIFICATION_STEPS = [
+  { key: 'OCR', label: 'Reading document (OCR)' },
+  { key: 'BANK', label: 'Checking with bank' },
+  { key: 'RULES', label: 'Running rules' },
+];
+
+// Mock OCR: common scanning confusions, so a mismatch can be demoed.
+const OCR_DIGIT_SWAP = { 0: '8', 8: '0', 1: '7', 7: '1', 5: '6', 6: '5', 3: '8', 2: '7', 4: '9', 9: '4' };
+const swapLastDigit = (text) => text.replace(/(\d)(\D*)$/, (_, d, rest) => OCR_DIGIT_SWAP[d] + rest);
+const swapFirstDigit = (text) => text.replace(/\d/, (d) => OCR_DIGIT_SWAP[d]);
+const MISREADS = [
+  ['fdrNumber', (f) => swapLastDigit(f.fdrNumber)],
+  ['amount', (f) => swapFirstDigit(String(f.amount))],
+  ['maturityDate', (f) => `${Number(f.maturityDate.slice(0, 4)) - 1}${f.maturityDate.slice(4)}`],
+];
+
+// Automated checks on a just-uploaded FDR; onStep(key) fires as each step finishes.
+// The backend runs these on upload, so the real API has no per-step progress to report.
+export async function runVerification(id, onStep = () => {}) {
+  if (!USE_MOCK) {
+    const fdr = await http(`/fdrs/${id}`);
+    VERIFICATION_STEPS.forEach((s) => onStep(s.key));
+    return fdr;
+  }
+  const fdr = fdrs.find((f) => f.id === id);
+  const overrides = {};
+  await delay(1400);
+  if (Math.random() < 0.5) { // OCR misreads one field about half the time
+    const [field, misread] = MISREADS[Math.floor(Math.random() * MISREADS.length)];
+    const claimed = field === 'amount' ? String(fdr.amount) : fdr[field];
+    overrides[field] = [claimed, misread(fdr), claimed]; // the bank record agrees with the institution
+  }
+  onStep('OCR');
+  await delay(1200);
+  onStep('BANK');
+  await delay(900);
+  onStep('RULES');
+  fdrs = fdrs.map((f) => (f.id === id ? { ...f, verification: verification(f, overrides) } : f));
+  return fdrs.find((f) => f.id === id);
 }
 
 export async function verifyFdr(id, decision, remarks) {

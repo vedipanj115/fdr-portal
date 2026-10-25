@@ -9,7 +9,8 @@ const field = (name, claimed, extracted, bank) => ({
   result: extracted == null || bank == null ? 'MISSING' : claimed === extracted && claimed === bank ? 'MATCH' : 'MISMATCH',
 });
 
-function verification(f, overrides = {}) {
+// overrides: { field: [claimed, extractedByOcr, bankRecord] } for fields that don't simply match
+export function verification(f, overrides = {}) {
   const base = {
     fdrNumber: [f.fdrNumber, f.fdrNumber, f.fdrNumber],
     bankName: [f.bankName, f.bankName, f.bankName],
