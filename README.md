@@ -47,7 +47,7 @@ npm run dev        # http://localhost:4000/health
 ## How we work
 
 1. Pull `dev` → create a branch (`feat/frontend-upload-fdr`) → commit small → open a PR into `dev`.
-2. One approval needed. CODEOWNERS requests the folder owner automatically.
+2.One approval needed. Add the folder owner as reviewer.
 3. Aarohi merges `dev` → `main` before demos and submissions.
 4. Never commit `.env`, passwords, API keys or `node_modules/`.
 
