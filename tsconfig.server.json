@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "strict": true, "skipLibCheck": true,
+    "noEmit": true, "resolveJsonModule": true, "lib": ["ES2023", "DOM"], "types": ["node"], "allowImportingTsExtensions": false, "esModuleInterop": true
+  },
+  "include": ["server", "src/lib/actions.ts", "src/lib/automation.ts", "src/lib/docgen.ts", "src/lib/anomaly.ts"]
+}
